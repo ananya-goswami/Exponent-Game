@@ -188,7 +188,6 @@
     toast:          $("toast"),
     penguinWalker:  $("penguinWalker"),
     targetLabel:    $("targetLabel"),
-    muteBtn:        $("muteBtn"),
     winFlash:       $("winFlash"),
     levelBanner:    $("levelBanner"),
     tutorialModal:  $("tutorialModal"),
@@ -754,11 +753,6 @@
       audio.click();
       dom.completeModal.classList.remove("show");
       loadLevel(0);
-    });
-    dom.muteBtn.addEventListener("click", () => {
-      const nowMuted = audio.toggleMuted();
-      dom.muteBtn.classList.toggle("muted", nowMuted);
-      if (!nowMuted) audio.click();   // confirm-on with a tiny click
     });
     window.addEventListener("keydown", onKey);
 

@@ -56,11 +56,6 @@
 
         <!-- Infinity / level marker -->
         <div class="infinity" title="Endless mode">∞</div>
-
-        <!-- Sound toggle (functional) -->
-        <button class="mute-btn" id="muteBtn" title="Toggle sound" aria-label="Toggle sound">
-          <span class="mute-btn__glyph"></span>
-        </button>
       </aside>
 
       <!-- MAIN PLAYFIELD -->
@@ -99,9 +94,14 @@
         <span class="action-btn__icon" id="actionIcon"></span>
       </button>
 
-      <!-- UNDO BUTTON (lower-right, flag-shape) -->
+      <!-- UNDO BUTTON (lower-right) -->
       <button class="undo-btn" id="undoBtn" title="Undo last" aria-label="Undo">
-        <span class="undo-arrow"></span>
+        <svg class="undo-arrow" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M24 23 A10 10 0 1 1 8 22"
+                fill="none" stroke="#ffffff" stroke-width="4"
+                stroke-linecap="round"/>
+          <polygon points="3,18 8,28 13,18" fill="#ffffff"/>
+        </svg>
       </button>
 
       <!-- Pause button (top of sidebar is occupied; place floating near top-right) -->
