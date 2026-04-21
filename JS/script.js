@@ -188,7 +188,8 @@
     toast:          $("toast"),
     penguinWalker:  $("penguinWalker"),
     targetLabel:    $("targetLabel"),
-    muteBtn:        $("muteBtn")
+    muteBtn:        $("muteBtn"),
+    winFlash:       $("winFlash")
   };
 
   /* Unicode superscript glyphs for the target label (avoids font quirks
@@ -539,6 +540,12 @@
 
     audio.correct();
     playPenguinWalk("walk");
+
+    // Brief warm glow overlay as positive visual feedback.
+    if (dom.winFlash) {
+      dom.winFlash.classList.add("on");
+      setTimeout(() => dom.winFlash.classList.remove("on"), 900);
+    }
 
     // Switch green button to "next" mode
     setGameState("levelComplete");
