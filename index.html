@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multiply It! — Educational Puzzle</title>
+  <link rel="stylesheet" href="CSS/styles.css" />
+</head>
+<body>
+  <!-- Outer viewport wrapper: centers and scales the fixed-size stage -->
+  <div class="viewport" id="viewport">
+    <!-- Fixed-size 1280x720 stage. All game coordinates live inside here. -->
+    <div class="stage" id="stage">
+
+      <!-- Background image (bg.png). Sits behind everything. -->
+      <div class="bg"></div>
+
+      <!-- Decorative drifting clouds built from the cloud sprite. -->
+      <div class="clouds">
+        <div class="cloud cloud--a"></div>
+        <div class="cloud cloud--b"></div>
+        <div class="cloud cloud--c"></div>
+      </div>
+
+      <!-- Green ground strip (pure CSS, overlays the bottom of bg) -->
+      <div class="ground"></div>
+
+      <!-- Walking penguin (4-frame sprite). Triggered on correct answer. -->
+      <div class="penguin-walker" id="penguinWalker" aria-hidden="true">
+        <div class="penguin"></div>
+      </div>
+
+      <!-- LEFT SIDEBAR -->
+      <aside class="sidebar">
+        <!-- Avatar/initials placeholder -->
+        <div class="avatar" aria-label="Player DT">DT</div>
+
+        <!-- Back arrow -->
+        <button class="back-btn" title="Back" aria-label="Back">
+          <span class="back-arrow"></span>
+        </button>
+
+        <!-- Vertical progress rail -->
+        <div class="progress">
+          <div class="progress__rail">
+            <div class="progress__fill" id="progressFill"></div>
+            <div class="progress__marker" id="progressMarker"></div>
+          </div>
+        </div>
+
+        <!-- Infinity / level marker -->
+        <div class="infinity" title="Endless mode">∞</div>
+
+        <!-- Sound toggle (functional) -->
+        <button class="mute-btn" id="muteBtn" title="Toggle sound" aria-label="Toggle sound">
+          <span class="mute-btn__glyph"></span>
+        </button>
+      </aside>
+
+      <!-- MAIN PLAYFIELD -->
+      <main class="playfield">
+        <!-- Source cluster (left) -->
+        <div class="cluster cluster--source" id="sourceCluster"></div>
+
+        <!-- Central translucent arrow -->
+        <div class="big-arrow" aria-hidden="true"></div>
+
+        <!-- Target cluster (right) -->
+        <div class="cluster cluster--target" id="targetCluster"></div>
+
+        <!-- Small equation label under the target (e.g. "2³") -->
+        <div class="target-label" id="targetLabel"></div>
+      </main>
+
+      <!-- Floating multiplier chip that animates onto source on select.
+           Lives directly under .stage so its pixel coords are stage-space. -->
+      <div class="fly-chip" id="flyChip" aria-hidden="true"></div>
+
+      <!-- ANSWER BAR (bottom center) -->
+      <div class="answer-bar" id="answerBar">
+        <div class="answer-bar__inner" id="answerInner">
+          <!-- Filled at runtime: source dot + chips -->
+        </div>
+      </div>
+
+      <!-- MULTIPLIER ROW -->
+      <div class="multipliers" id="multipliers">
+        <!-- Buttons injected by JS -->
+      </div>
+
+      <!-- GREEN ACTION BUTTON (lower-left) -->
+      <button class="action-btn" id="actionBtn" title="Submit / Next">
+        <span class="action-btn__icon" id="actionIcon"></span>
+      </button>
+
+      <!-- UNDO BUTTON (lower-right, flag-shape) -->
+      <button class="undo-btn" id="undoBtn" title="Undo last" aria-label="Undo">
+        <span class="undo-arrow"></span>
+      </button>
+
+      <!-- Pause button (top of sidebar is occupied; place floating near top-right) -->
+      <button class="pause-btn" id="pauseBtn" title="Pause" aria-label="Pause">
+        <span></span><span></span>
+      </button>
+
+      <!-- TOAST for feedback -->
+      <div class="toast" id="toast"></div>
+
+      <!-- PAUSE MODAL -->
+      <div class="modal" id="pauseModal" role="dialog" aria-hidden="true">
+        <div class="modal__card">
+          <h2 class="modal__title">Paused</h2>
+          <button class="modal__btn modal__btn--primary" id="resumeBtn">Resume</button>
+          <button class="modal__btn" id="restartBtn">Restart Level</button>
+        </div>
+      </div>
+
+      <!-- GAME COMPLETE MODAL -->
+      <div class="modal" id="completeModal" role="dialog" aria-hidden="true">
+        <div class="modal__card">
+          <h2 class="modal__title">Great Work!</h2>
+          <p class="modal__sub">You finished every puzzle.</p>
+          <button class="modal__btn modal__btn--primary" id="playAgainBtn">Play Again</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="JS/levels.js"></script>
+  <script src="JS/script.js"></script>
+</body>
+</html>
