@@ -11,7 +11,8 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0b2c4a;                 /* letterbox color around stage */
+  /* Matches the stage sky so letterbox bars disappear at any aspect ratio. */
+  background: linear-gradient(to bottom, #56c7ff 0%, #9bdcff 55%, #c9ecff 100%);
   font-family: "Nunito", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -27,15 +28,14 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
   display: flex; align-items: center; justify-content: center;
 }
 
-/* The game lives in a fixed 1280x720 coordinate space. JS scales it to fit. */
+/* The game lives in a fixed 1280x720 coordinate space. JS scales it to fit.
+   Shadow/border removed so the stage blends edge-to-edge with the body sky. */
 .stage {
   position: relative;
   width: 1280px;
   height: 720px;
   transform-origin: center center;
   overflow: hidden;
-  border-radius: 4px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.45);
 }
 
 /* ---------- Background ---------- */
@@ -43,7 +43,7 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
    bg.png is intentionally no longer used so the gradient shows through. */
 .bg {
   position: absolute; inset: 0;
-  background: linear-gradient(to bottom, #6dcef8 0%, #a9e2fb 55%, #c9ecff 100%);
+  background: linear-gradient(to bottom, #56c7ff 0%, #9bdcff 55%, #c9ecff 100%);
   background-color: #8fd3ff;
 }
 
@@ -83,20 +83,23 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 /* ---------- Ground strip (overlays bottom if bg doesn't cover well) ---------- */
 .ground {
   position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: 72px;
-  background: linear-gradient(to bottom, #7cc96a, #4d9b3d);
+  left: -4%; right: -4%; bottom: 0;
+  height: 86px;
+  background: linear-gradient(to bottom, #8ed96f 0%, #5db23c 60%, #3f8a2c 100%);
   border-top: 4px solid #3e8a30;
-  box-shadow: 0 -3px 8px rgba(0,0,0,0.08), inset 0 4px 0 rgba(255,255,255,0.12);
+  /* Gentle horizon curve — wider than viewport so edges don't show the arc ends. */
+  border-top-left-radius: 50% 32px;
+  border-top-right-radius: 50% 32px;
+  box-shadow: 0 -4px 10px rgba(0,0,0,0.08), inset 0 5px 0 rgba(255,255,255,0.14);
   z-index: 1;
 }
 .ground::before {
   content: '';
   position: absolute;
-  top: -8px; left: 0; right: 0; height: 8px;
-  background: repeating-linear-gradient(90deg, #5fb54a 0 14px, #4aa039 14px 28px);
-  border-radius: 4px 4px 0 0;
-  opacity: 0.6;
+  top: -4px; left: 4%; right: 4%; height: 10px;
+  background: repeating-linear-gradient(90deg, #6fc751 0 10px, #58b239 10px 20px);
+  border-radius: 6px 6px 0 0;
+  opacity: 0.75;
 }
 
 /* ==================================================================
@@ -188,17 +191,26 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
   z-index: 5;
 }
 
+/* Orange "x^2" badge — playful, high-contrast logo top-of-sidebar. */
 .avatar {
-  width: 42px; height: 42px;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #3a6ea0 0%, #28567f 100%);
+  width: 46px; height: 46px;
+  border-radius: 12px;
+  background: linear-gradient(#ffb238, #f39c12);
   color: #fff;
-  font-weight: 800;
-  font-size: 15px;
+  font-weight: 900;
+  font-size: 22px;
   letter-spacing: 0.5px;
   display: flex; align-items: center; justify-content: center;
-  margin-top: 6px;
-  box-shadow: 0 2px 0 rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.15);
+  margin-top: 8px;
+  box-shadow: 0 3px 0 #c87f00, 0 5px 8px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.35);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.15);
+}
+.avatar sup {
+  font-size: 0.7em;
+  font-weight: 900;
+  position: relative;
+  top: -0.4em;
+  margin-left: 1px;
 }
 
 .back-btn {
@@ -496,7 +508,7 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 .answer-bar {
   position: absolute;
   left: 50%;
-  bottom: 140px;
+  bottom: 190px;
   transform: translateX(-50%);
   min-width: 220px;
   height: 48px;
@@ -556,6 +568,7 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 .answer-bar.shake { animation: shake 420ms ease; }
 .answer-bar.error { background: rgba(255, 140, 140, 0.6); }
 .answer-bar.success { background: rgba(160, 230, 140, 0.7); }
+.answer-bar.empty { opacity: 0; transition: opacity 180ms ease; }
 @keyframes shake {
   0%,100% { transform: translateX(-50%) translateX(0); }
   15%     { transform: translateX(-50%) translateX(-10px); }
@@ -571,23 +584,32 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 .multipliers {
   position: absolute;
   left: 50%;
-  bottom: 78px;
+  bottom: 100px;
   transform: translateX(-50%);
-  display: flex; gap: 8px;
+  display: flex; gap: 12px;
   z-index: 4;
 }
 .mult-btn {
-  width: 62px; height: 46px;
-  border-radius: 14px;
+  width: 70px; height: 70px;
+  border-radius: 18px;
   background: #ffffff;
   color: #2c3e50;
   font-weight: 800;
-  font-size: 17px;
+  font-size: 24px;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 5px 0 #b8c5d6, 0 8px 14px rgba(0,0,0,0.12);
   transition: transform 110ms ease, box-shadow 110ms ease, filter 110ms ease, background 110ms ease;
   position: relative;
   overflow: hidden;
+}
+.mult-btn.shake { animation: multShake 0.4s ease; }
+@keyframes multShake {
+  0%,100% { transform: translateX(0); }
+  15% { transform: translateX(-6px); }
+  30% { transform: translateX(6px); }
+  45% { transform: translateX(-5px); }
+  60% { transform: translateX(4px); }
+  75% { transform: translateX(-2px); }
 }
 /* Pattern A: the single base button in exponent mode — wider and louder */
 .mult-btn.mult-btn--exp {
@@ -694,27 +716,48 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 .undo-btn {
   position: absolute;
   right: 70px;
-  bottom: 90px;
-  width: 62px; height: 48px;
-  background: linear-gradient(180deg, #e3e8ef 0%, #b7c0cc 100%);
-  clip-path: polygon(15% 0, 100% 0, 100% 100%, 15% 100%, 0 50%);
-  box-shadow:
-    0 3px 0 rgba(0,0,0,0.15),
-    inset 0 2px 0 rgba(255,255,255,0.5);
+  bottom: 86px;
+  width: 62px; height: 62px;
+  border-radius: 50%;
+  background: linear-gradient(#ff8a5c, #e86a2f);
+  box-shadow: 0 4px 0 #b14d1c, 0 6px 12px rgba(0,0,0,0.28);
   display: flex; align-items: center; justify-content: center;
-  padding-left: 10px;
-  transition: transform 120ms ease, filter 120ms ease;
+  padding: 0;
+  transition: transform 150ms ease, box-shadow 150ms ease, filter 120ms ease;
+  overflow: hidden;
   z-index: 4;
 }
-.undo-btn:hover { filter: brightness(1.05); }
-.undo-btn:active { transform: translateY(2px); }
-.undo-btn.disabled { filter: grayscale(0.6) brightness(0.85); pointer-events: none; }
+.undo-btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 #b14d1c, 0 10px 16px rgba(0,0,0,0.32);
+}
+.undo-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #b14d1c, 0 3px 6px rgba(0,0,0,0.28);
+}
+.undo-btn.disabled { filter: grayscale(0.55) brightness(0.9); pointer-events: none; }
 
+/* Curved-arrow undo glyph: semi-circle ring + arrowhead. */
 .undo-arrow {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: 4px solid #ffffff;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  transform: rotate(-45deg);
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.15));
+}
+.undo-arrow::after {
+  content: '';
+  position: absolute;
+  top: -3px; left: -6px;
   width: 0; height: 0;
   border-style: solid;
-  border-width: 7px 10px 7px 0;
-  border-color: transparent #5a6a7c transparent transparent;
+  border-width: 6px 7px 6px 0;
+  border-color: transparent #ffffff transparent transparent;
 }
 
 /* ==================================================================
@@ -722,18 +765,24 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
    ================================================================== */
 .pause-btn {
   position: absolute;
-  top: 16px; right: 18px;
-  width: 36px; height: 36px;
-  border-radius: 8px;
-  background: rgba(255,255,255,0.18);
+  top: 18px; right: 20px;
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  background: #ffffff;
   display: flex; align-items: center; justify-content: center;
-  gap: 4px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 2px 4px rgba(0,0,0,0.15);
-  transition: background 120ms ease, transform 120ms ease;
+  gap: 5px;
+  box-shadow: 0 4px 0 #b8c5d6, 0 6px 10px rgba(0,0,0,0.18);
+  transition: transform 140ms ease, box-shadow 140ms ease;
   z-index: 7;
 }
-.pause-btn:hover { background: rgba(255,255,255,0.28); }
-.pause-btn:active { transform: scale(0.94); }
+.pause-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 #b8c5d6, 0 8px 12px rgba(0,0,0,0.22);
+}
+.pause-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #b8c5d6, 0 3px 6px rgba(0,0,0,0.18);
+}
 .pause-btn span {
   display: block; width: 5px; height: 16px; border-radius: 2px;
   background: #1e3a55;
@@ -810,11 +859,44 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
   color: #0a2a0a;
 }
 
+/* Tutorial list styling inside the modal */
+.modal__card--tutorial { width: 360px; text-align: left; }
+.modal__card--tutorial .modal__title { text-align: center; }
+.tutorial__list {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 20px;
+}
+.tutorial__list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: #f4f7fb;
+  border-radius: 12px;
+  color: #1e3a55;
+  font-weight: 700;
+  font-size: 15px;
+}
+.tutorial__icon {
+  width: 34px; height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: linear-gradient(#ffb238, #f39c12);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 0 #c87f00;
+}
+
 /* ==================================================================
    SHINE SWEEP (applied to CTAs — borrowed from reference layout)
    ================================================================== */
 .mult-btn::after,
-.action-btn::after {
+.action-btn::after,
+.undo-btn::after {
   content: '';
   position: absolute;
   top: 0; bottom: 0; left: 0; right: 0;
@@ -831,8 +913,9 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
   filter: blur(1px);
   z-index: 2;
 }
-.action-btn::after {
-  /* Greener sheen on the play button so the sweep reads without tinting white */
+.action-btn::after,
+.undo-btn::after {
+  /* Lighter sheen on the colored buttons so the sweep reads without washing out */
   background: linear-gradient(120deg,
     rgba(255,255,255,0)    0%,
     rgba(255,255,255,0.25) 30%,
@@ -842,13 +925,36 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 }
 .mult-btn:hover::after,
 .action-btn:hover::after,
+.undo-btn:hover::after,
 .mult-btn.shine::after,
-.action-btn.shine::after {
+.action-btn.shine::after,
+.undo-btn.shine::after {
   animation: shineSweep 0.7s ease forwards;
 }
 @keyframes shineSweep {
   0%   { transform: translateX(-120%); opacity: 1; }
   100% { transform: translateX(120%);  opacity: 1; }
+}
+
+/* ==================================================================
+   LEVEL BANNER (top-center pill)
+   ================================================================== */
+.level-banner {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffffff;
+  color: #1e3a55;
+  padding: 9px 24px;
+  border-radius: 22px;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.8);
+  z-index: 6;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 /* ==================================================================

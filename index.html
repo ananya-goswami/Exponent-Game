@@ -28,6 +28,9 @@
       <!-- Warm yellow glow overlay that briefly lights up on a correct answer -->
       <div class="win-flash" id="winFlash"></div>
 
+      <!-- Top-center level banner (e.g. "Level 5 of 10 — Build 5²") -->
+      <div class="level-banner" id="levelBanner">Level 1</div>
+
       <!-- Walking penguin (4-frame sprite). Triggered on correct answer. -->
       <div class="penguin-walker" id="penguinWalker" aria-hidden="true">
         <div class="penguin"></div>
@@ -35,8 +38,8 @@
 
       <!-- LEFT SIDEBAR -->
       <aside class="sidebar">
-        <!-- Avatar/initials placeholder -->
-        <div class="avatar" aria-label="Player DT">DT</div>
+        <!-- Orange x^2 logo badge -->
+        <div class="avatar" aria-label="Exponents">x<sup>2</sup></div>
 
         <!-- Back arrow -->
         <button class="back-btn" title="Back" aria-label="Back">
@@ -124,6 +127,19 @@
           <h2 class="modal__title">Great Work!</h2>
           <p class="modal__sub">You finished every puzzle.</p>
           <button class="modal__btn modal__btn--primary" id="playAgainBtn">Play Again</button>
+        </div>
+      </div>
+
+      <!-- FIRST-LOAD TUTORIAL MODAL -->
+      <div class="modal" id="tutorialModal" role="dialog" aria-hidden="true">
+        <div class="modal__card modal__card--tutorial">
+          <h2 class="modal__title">How to play</h2>
+          <ul class="tutorial__list">
+            <li><span class="tutorial__icon">&times;</span>Tap a number to multiply</li>
+            <li><span class="tutorial__icon">&#127919;</span>Reach the target to win</li>
+            <li><span class="tutorial__icon">&#8630;</span>Use undo if you make a mistake</li>
+          </ul>
+          <button class="modal__btn modal__btn--primary" id="tutorialStartBtn">Got it!</button>
         </div>
       </div>
 

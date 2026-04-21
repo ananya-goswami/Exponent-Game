@@ -189,7 +189,10 @@
     penguinWalker:  $("penguinWalker"),
     targetLabel:    $("targetLabel"),
     muteBtn:        $("muteBtn"),
-    winFlash:       $("winFlash")
+    winFlash:       $("winFlash"),
+    levelBanner:    $("levelBanner"),
+    tutorialModal:  $("tutorialModal"),
+    tutorialStartBtn: $("tutorialStartBtn")
   };
 
   /* Unicode superscript glyphs for the target label (avoids font quirks
@@ -340,6 +343,7 @@
     renderMultipliers();
     renderAnswerBar();
     renderTargetLabel();
+    renderLevelBanner();
     dom.answerBar.classList.remove("error","success","shake");
   }
 
@@ -350,24 +354,48 @@
     dom.targetLabel.innerHTML = `${lv.base}<sup>${lv.exponent}</sup>`;
   }
 
+  // Top-center banner — shows current level and target equation.
+  function renderLevelBanner() {
+    const lv = currentLevel();
+    if (!dom.levelBanner) return;
+    const total = game.levels.length;
+    dom.levelBanner.innerHTML = `Level ${game.levelIndex + 1} of ${total} — Build ${lv.base}<sup>${lv.exponent}</sup>`;
+  }
+
   /* ------------------------------------------------------------
-     Multiplier buttons (Pattern A: one big "× base" tile per level)
+     Multiplier buttons — kid-friendly 4-choice row (×2, ×3, ×4, ×5).
+     Only the level's base advances the puzzle; wrong picks shake &
+     play the wrong-sound, matching the reference layout's UX.
      ------------------------------------------------------------ */
+  const MULTIPLIER_CHOICES = [2, 3, 4, 5];
+
   function renderMultipliers() {
     dom.multipliers.innerHTML = "";
-    const lv = currentLevel();
-    // Exponent mode: each level exposes a single base button.
-    const base = lv.allowedMultipliers[0];
-    const b = document.createElement("button");
-    b.className = "mult-btn mult-btn--exp";
-    b.dataset.mult = base;
-    b.innerHTML = `× ${base}`;
-    b.addEventListener("click", () => onMultiplierClick(base, b));
-    dom.multipliers.appendChild(b);
+    MULTIPLIER_CHOICES.forEach((m) => {
+      const b = document.createElement("button");
+      b.className = "mult-btn";
+      b.dataset.mult = m;
+      b.innerHTML = `&times;${m}`;
+      b.addEventListener("click", () => onMultiplierClick(m, b));
+      dom.multipliers.appendChild(b);
+    });
   }
 
   function onMultiplierClick(m, btnEl) {
     if (game.state !== "ready" && game.state !== "buildingAnswer") return;
+    const lv = currentLevel();
+    // Not the level's base → reject with shake + wrong sound, don't mutate state.
+    if (!lv.allowedMultipliers.includes(m)) {
+      if (btnEl) {
+        btnEl.classList.remove("shake");
+        void btnEl.offsetWidth;
+        btnEl.classList.add("shake");
+        setTimeout(() => btnEl.classList.remove("shake"), 420);
+      }
+      audio.wrong();
+      flashToast("Try a different number", "bad");
+      return;
+    }
     addMultiplier(m, btnEl);
   }
 
@@ -436,11 +464,6 @@
   function renderAnswerBar() {
     dom.answerInner.innerHTML = "";
 
-    // Source dot indicator
-    const srcDot = document.createElement("span");
-    srcDot.className = "src-dot";
-    dom.answerInner.appendChild(srcDot);
-
     // Show exponent chip if user has made at least one tap.
     if (game.selected.length > 0) {
       const base = game.selected[0];
@@ -450,6 +473,7 @@
       chip.innerHTML = `× ${base}<sup>${exp}</sup>`;
       dom.answerInner.appendChild(chip);
     }
+    dom.answerBar.classList.toggle("empty", game.selected.length === 0);
 
     updateActionButton();
     updateUndoButton();
@@ -689,14 +713,20 @@
      Keyboard support
      ------------------------------------------------------------ */
   function onKey(e) {
+    // Ignore input while the first-load tutorial overlay is up.
+    if (dom.tutorialModal && dom.tutorialModal.classList.contains("show")) {
+      if (e.key === "Enter" || e.key === "Escape") {
+        e.preventDefault();
+        dom.tutorialStartBtn && dom.tutorialStartBtn.click();
+      }
+      return;
+    }
     if (game.state === "paused") {
       if (e.key === "Escape") resumeGame();
       return;
     }
     if (["2","3","4","5"].includes(e.key)) {
       const m = parseInt(e.key, 10);
-      const lv = currentLevel();
-      if (!lv.allowedMultipliers.includes(m)) return;
       const btn = dom.multipliers.querySelector(`[data-mult="${m}"]`);
       onMultiplierClick(m, btn);
     } else if (e.key === "Backspace") {
@@ -731,6 +761,21 @@
       if (!nowMuted) audio.click();   // confirm-on with a tiny click
     });
     window.addEventListener("keydown", onKey);
+
+    // First-load tutorial. localStorage is wrapped in try/catch because
+    // some browsers block it for file:// origins.
+    let seen = false;
+    try { seen = localStorage.getItem("mg.tutorialSeen") === "1"; } catch (_) {}
+    if (!seen && dom.tutorialModal) {
+      dom.tutorialModal.classList.add("show");
+    }
+    if (dom.tutorialStartBtn) {
+      dom.tutorialStartBtn.addEventListener("click", () => {
+        audio.click();
+        dom.tutorialModal.classList.remove("show");
+        try { localStorage.setItem("mg.tutorialSeen", "1"); } catch (_) {}
+      });
+    }
 
     loadLevel(0);
   }
