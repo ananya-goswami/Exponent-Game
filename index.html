@@ -3,17 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Multiply It! — Educational Puzzle</title>
+  <title>Exponent game</title>
   <link rel="stylesheet" href="CSS/styles.css" />
 </head>
 <body>
-  <!-- Outer viewport wrapper: centers and scales the fixed-size stage -->
+  <!-- Outer viewport wrapper. It holds the full-bleed scene backdrop (sky
+       + ground) and the scaled game stage. The backdrop lives HERE — not
+       inside the scaled stage — so it always covers the entire browser
+       window, with no pillar/letterbox gutters at any aspect ratio. -->
   <div class="viewport" id="viewport">
-    <!-- Fixed-size 1280x720 stage. All game coordinates live inside here. -->
-    <div class="stage" id="stage">
+    <!-- Full-bleed scene layers. They span the viewport, not the stage,
+         so they stay edge-to-edge no matter how the stage is scaled. -->
+    <div class="scene-sky"    aria-hidden="true"></div>
+    <div class="scene-ground" aria-hidden="true"></div>
 
-      <!-- Background image (bg.png). Sits behind everything. -->
-      <div class="bg"></div>
+    <!-- Fixed-size 1280x720 stage. All game coordinates live inside here.
+         The stage is transparent — clouds and UI sit on top of the
+         viewport-level scene. -->
+    <div class="stage" id="stage">
 
       <!-- Decorative drifting clouds built from the cloud sprite. -->
       <div class="clouds">
@@ -21,12 +28,6 @@
         <div class="cloud cloud--b"></div>
         <div class="cloud cloud--c"></div>
       </div>
-
-      <!-- Green ground strip (pure CSS, overlays the bottom of bg) -->
-      <div class="ground"></div>
-
-      <!-- Warm yellow glow overlay that briefly lights up on a correct answer -->
-      <div class="win-flash" id="winFlash"></div>
 
       <!-- Top-center level banner (e.g. "Level 5 of 10 — Build 5²") -->
       <div class="level-banner" id="levelBanner">Level 1</div>
@@ -58,20 +59,12 @@
         <div class="infinity" title="Endless mode">∞</div>
       </aside>
 
-      <!-- MAIN PLAYFIELD -->
-      <main class="playfield">
-        <!-- Source cluster (left) -->
-        <div class="cluster cluster--source" id="sourceCluster"></div>
-
-        <!-- Central translucent arrow -->
-        <div class="big-arrow" aria-hidden="true"></div>
-
-        <!-- Target cluster (right) -->
-        <div class="cluster cluster--target" id="targetCluster"></div>
-
-        <!-- Small equation label under the target (e.g. "2³") -->
-        <div class="target-label" id="targetLabel"></div>
-      </main>
+      <!-- Puzzle scene — direct children of the stage so they position
+           against the full 1280x720 design space, not an inner wrapper. -->
+      <div class="cluster cluster--source" id="sourceCluster"></div>
+      <div class="big-arrow" aria-hidden="true"></div>
+      <div class="cluster cluster--target" id="targetCluster"></div>
+      <div class="target-label" id="targetLabel"></div>
 
       <!-- Floating multiplier chip that animates onto source on select.
            Lives directly under .stage so its pixel coords are stage-space. -->
@@ -96,12 +89,7 @@
 
       <!-- UNDO BUTTON (lower-right) -->
       <button class="undo-btn" id="undoBtn" title="Undo last" aria-label="Undo">
-        <svg class="undo-arrow" viewBox="0 0 32 32" aria-hidden="true">
-          <path d="M24 23 A10 10 0 1 1 8 22"
-                fill="none" stroke="#ffffff" stroke-width="4"
-                stroke-linecap="round"/>
-          <polygon points="3,18 8,28 13,18" fill="#ffffff"/>
-        </svg>
+        <img class="undo-arrow" src="Assets/undo-svgrepo-com.svg" alt="" aria-hidden="true" draggable="false" />
       </button>
 
       <!-- Pause button (top of sidebar is occupied; place floating near top-right) -->
@@ -144,6 +132,11 @@
       </div>
 
     </div>
+
+    <!-- Full-viewport warm glow overlay that briefly lights up on a correct
+         answer. Lives as a sibling of the stage so it covers the entire
+         browser window (including pillar/letterbox), not just 1280x720. -->
+    <div class="win-flash" id="winFlash" aria-hidden="true"></div>
   </div>
 
   <script src="JS/levels.js"></script>

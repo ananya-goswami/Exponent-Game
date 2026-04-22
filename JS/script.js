@@ -202,13 +202,34 @@
   }
 
   /* ------------------------------------------------------------
-     Utility: scale fixed-size stage to fit window
+     Utility: scale fixed-size stage to fit window.
+
+     Also publishes two CSS custom properties used by the viewport-level
+     scene backdrop (see .scene-sky / .scene-ground in CSS):
+       --stage-scale        the current min-fit scale factor
+       --scene-ground-h     the height, in CSS px, of the bottom green band
+                            at the viewport level. It equals the original
+                            86 stage-px ground scaled by `s`, plus any
+                            bottom letterbox that exists on tall viewports,
+                            so the green always reaches the viewport bottom
+                            and visually meets where the stage's ground
+                            used to sit.
      ------------------------------------------------------------ */
+  const STAGE_GROUND_H = 86; // stage-coord height of the ground band
+
   function fitStage() {
     const sx = window.innerWidth  / STAGE_W;
     const sy = window.innerHeight / STAGE_H;
     const s = Math.min(sx, sy);
     dom.stage.style.transform = `scale(${s})`;
+
+    const stageRenderedH = STAGE_H * s;
+    const bottomLetterbox = Math.max(0, (window.innerHeight - stageRenderedH) / 2);
+    const groundH = STAGE_GROUND_H * s + bottomLetterbox;
+
+    const root = document.documentElement;
+    root.style.setProperty("--stage-scale", s);
+    root.style.setProperty("--scene-ground-h", groundH + "px");
   }
   window.addEventListener("resize", fitStage);
 
@@ -321,6 +342,9 @@
   function currentLevel() { return game.levels[game.levelIndex]; }
 
   function loadLevel(index) {
+    // Drop any pending auto-advance listener from the previous level so we
+    // never stack handlers across multiple level transitions.
+    clearPenguinWalkEndListener();
     if (index >= game.levels.length) {
       setGameState("gameComplete");
       return;
@@ -331,6 +355,44 @@
     renderLevel();
     setGameState("ready");
     updateProgress();
+  }
+
+  // ------------------------------------------------------------
+  //  Auto-advance: when the penguin finishes its cross-walk after a correct
+  //  answer, the next level loads automatically. No click required.
+  //  The handler is kept in a module variable so we can cancel a stale
+  //  registration before attaching a new one.
+  // ------------------------------------------------------------
+  let pendingWalkEndHandler = null;
+
+  function clearPenguinWalkEndListener() {
+    if (pendingWalkEndHandler && dom.penguinWalker) {
+      dom.penguinWalker.removeEventListener("animationend", pendingWalkEndHandler);
+    }
+    pendingWalkEndHandler = null;
+  }
+
+  function onPenguinWalkEnd(callback) {
+    const el = dom.penguinWalker;
+    if (!el) { callback(); return; }
+    clearPenguinWalkEndListener();
+    pendingWalkEndHandler = (e) => {
+      // The walker hosts the forward `walkCross` animation; its inner sprite
+      // hosts the infinite `walkCycle` (which never fires animationend) and,
+      // on retreat, `walkRetreat` / `penguinFlip`. Only match `walkCross`.
+      if (e.animationName !== "walkCross") return;
+      clearPenguinWalkEndListener();
+      callback();
+    };
+    el.addEventListener("animationend", pendingWalkEndHandler);
+  }
+
+  // Centralized advance — guards against double-trigger by requiring the
+  // levelComplete state. `loadLevel` immediately resets state to "ready"
+  // (or "gameComplete"), so any later re-entry is a no-op.
+  function goToNextLevel() {
+    if (game.state !== "levelComplete") return;
+    loadLevel(game.levelIndex + 1);
   }
 
   function renderLevel() {
@@ -573,6 +635,11 @@
     // Switch green button to "next" mode
     setGameState("levelComplete");
     updateProgress(true);
+
+    // Auto-advance: when the penguin's cross-walk animation finishes, load
+    // the next level. The button still works as a manual skip but is no
+    // longer required — both routes funnel through goToNextLevel.
+    onPenguinWalkEnd(goToNextLevel);
   }
 
   /* ------------------------------------------------------------
@@ -679,7 +746,7 @@
     if (dom.actionBtn.classList.contains("disabled")) return;
     if (game.state === "levelComplete") {
       audio.click();
-      loadLevel(game.levelIndex + 1);
+      goToNextLevel();
       return;
     }
     if (game.selected.length > 0) {
