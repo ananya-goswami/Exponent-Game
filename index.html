@@ -17,6 +17,26 @@
     <div class="scene-sky"    aria-hidden="true"></div>
     <div class="scene-ground" aria-hidden="true"></div>
 
+    <!-- HUD buttons that must anchor to the true browser corners (not the
+         scaled stage corners). Live on the viewport, not the stage, so their
+         size stays constant on any aspect ratio and they always touch the
+         real browser edges. -->
+    <button class="undo-btn" id="undoBtn" title="Undo last" aria-label="Undo">
+      <img class="undo-arrow" src="Assets/undo-svgrepo-com.svg" alt="" aria-hidden="true" draggable="false" />
+    </button>
+    <button class="pause-btn" id="pauseBtn" title="Pause" aria-label="Pause">
+      <span></span><span></span>
+    </button>
+
+    <!-- Viewport-fixed HUD: banner pinned to true browser top, multipliers
+         pinned to true browser bottom. Must live outside .stage because the
+         stage's transform: scale(...) would otherwise re-scope position:fixed. -->
+    <div class="level-banner" id="levelBanner">Level 1</div>
+    <div class="answer-bar" id="answerBar">
+      <div class="answer-bar__inner" id="answerInner"></div>
+    </div>
+    <div class="multipliers" id="multipliers"></div>
+
     <!-- Fixed-size 1280x720 stage. All game coordinates live inside here.
          The stage is transparent — clouds and UI sit on top of the
          viewport-level scene. -->
@@ -29,9 +49,6 @@
         <div class="cloud cloud--c"></div>
       </div>
 
-      <!-- Top-center level banner (e.g. "Level 5 of 10 — Build 5²") -->
-      <div class="level-banner" id="levelBanner">Level 1</div>
-
       <!-- Walking penguin (4-frame sprite). Triggered on correct answer. -->
       <div class="penguin-walker" id="penguinWalker" aria-hidden="true">
         <div class="penguin"></div>
@@ -39,24 +56,26 @@
 
       <!-- LEFT SIDEBAR -->
       <aside class="sidebar">
-        <!-- Orange x^2 logo badge -->
-        <div class="avatar" aria-label="Exponents">x<sup>2</sup></div>
+        <!-- Top: orange x^2 logo badge -->
+        <div class="top-group">
+          <div class="avatar" aria-label="Exponents">x<sup>2</sup></div>
+        </div>
 
-        <!-- Back arrow -->
-        <button class="back-btn" title="Back" aria-label="Back">
-          <span class="back-arrow"></span>
-        </button>
-
-        <!-- Vertical progress rail -->
-        <div class="progress">
-          <div class="progress__rail">
-            <div class="progress__fill" id="progressFill"></div>
-            <div class="progress__marker" id="progressMarker"></div>
+        <!-- Middle: vertical progress rail -->
+        <div class="middle-group">
+          <div class="progress">
+            <div class="progress__rail">
+              <div class="progress__fill" id="progressFill">
+                <div class="progress__marker" id="progressMarker"></div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Infinity / level marker -->
-        <div class="infinity" title="Endless mode">∞</div>
+        <!-- Bottom: infinity / endless marker -->
+        <div class="bottom-group">
+          <div class="infinity" title="Endless mode">∞</div>
+        </div>
       </aside>
 
       <!-- Puzzle scene — direct children of the stage so they position
@@ -70,66 +89,13 @@
            Lives directly under .stage so its pixel coords are stage-space. -->
       <div class="fly-chip" id="flyChip" aria-hidden="true"></div>
 
-      <!-- ANSWER BAR (bottom center) -->
-      <div class="answer-bar" id="answerBar">
-        <div class="answer-bar__inner" id="answerInner">
-          <!-- Filled at runtime: source dot + chips -->
-        </div>
-      </div>
-
-      <!-- MULTIPLIER ROW -->
-      <div class="multipliers" id="multipliers">
-        <!-- Buttons injected by JS -->
-      </div>
-
       <!-- GREEN ACTION BUTTON (lower-left) -->
       <button class="action-btn" id="actionBtn" title="Submit / Next">
         <span class="action-btn__icon" id="actionIcon"></span>
       </button>
 
-      <!-- UNDO BUTTON (lower-right) -->
-      <button class="undo-btn" id="undoBtn" title="Undo last" aria-label="Undo">
-        <img class="undo-arrow" src="Assets/undo-svgrepo-com.svg" alt="" aria-hidden="true" draggable="false" />
-      </button>
-
-      <!-- Pause button (top of sidebar is occupied; place floating near top-right) -->
-      <button class="pause-btn" id="pauseBtn" title="Pause" aria-label="Pause">
-        <span></span><span></span>
-      </button>
-
       <!-- TOAST for feedback -->
       <div class="toast" id="toast"></div>
-
-      <!-- PAUSE MODAL -->
-      <div class="modal" id="pauseModal" role="dialog" aria-hidden="true">
-        <div class="modal__card">
-          <h2 class="modal__title">Paused</h2>
-          <button class="modal__btn modal__btn--primary" id="resumeBtn">Resume</button>
-          <button class="modal__btn" id="restartBtn">Restart Level</button>
-        </div>
-      </div>
-
-      <!-- GAME COMPLETE MODAL -->
-      <div class="modal" id="completeModal" role="dialog" aria-hidden="true">
-        <div class="modal__card">
-          <h2 class="modal__title">Great Work!</h2>
-          <p class="modal__sub">You finished every puzzle.</p>
-          <button class="modal__btn modal__btn--primary" id="playAgainBtn">Play Again</button>
-        </div>
-      </div>
-
-      <!-- FIRST-LOAD TUTORIAL MODAL -->
-      <div class="modal" id="tutorialModal" role="dialog" aria-hidden="true">
-        <div class="modal__card modal__card--tutorial">
-          <h2 class="modal__title">How to play</h2>
-          <ul class="tutorial__list">
-            <li><span class="tutorial__icon">&times;</span>Tap a number to multiply</li>
-            <li><span class="tutorial__icon">&#127919;</span>Reach the target to win</li>
-            <li><span class="tutorial__icon">&#8630;</span>Use undo if you make a mistake</li>
-          </ul>
-          <button class="modal__btn modal__btn--primary" id="tutorialStartBtn">Got it!</button>
-        </div>
-      </div>
 
     </div>
 
@@ -137,6 +103,37 @@
          answer. Lives as a sibling of the stage so it covers the entire
          browser window (including pillar/letterbox), not just 1280x720. -->
     <div class="win-flash" id="winFlash" aria-hidden="true"></div>
+
+    <!-- Modals live on the viewport (not the stage) so their full-screen
+         backdrop covers the entire browser window and the centered card
+         sits at the true screen center on any aspect ratio. -->
+    <div class="modal" id="pauseModal" role="dialog" aria-hidden="true">
+      <div class="modal__card">
+        <h2 class="modal__title">Paused</h2>
+        <button class="modal__btn modal__btn--primary" id="resumeBtn">Resume</button>
+        <button class="modal__btn" id="restartBtn">Restart Level</button>
+      </div>
+    </div>
+
+    <div class="modal" id="completeModal" role="dialog" aria-hidden="true">
+      <div class="modal__card">
+        <h2 class="modal__title">Great Work!</h2>
+        <p class="modal__sub">You finished every puzzle.</p>
+        <button class="modal__btn modal__btn--primary" id="playAgainBtn">Play Again</button>
+      </div>
+    </div>
+
+    <div class="modal" id="tutorialModal" role="dialog" aria-hidden="true">
+      <div class="modal__card modal__card--tutorial">
+        <h2 class="modal__title">How to play</h2>
+        <ul class="tutorial__list">
+          <li><span class="tutorial__icon">&times;</span>Tap a number to multiply</li>
+          <li><span class="tutorial__icon">&#127919;</span>Reach the target to win</li>
+          <li><span class="tutorial__icon">&#8630;</span>Use undo if you make a mistake</li>
+        </ul>
+        <button class="modal__btn modal__btn--primary" id="tutorialStartBtn">Got it!</button>
+      </div>
+    </div>
   </div>
 
   <script src="JS/levels.js"></script>

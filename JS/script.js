@@ -224,7 +224,9 @@
     dom.stage.style.transform = `scale(${s})`;
 
     const stageRenderedH = STAGE_H * s;
-    const bottomLetterbox = Math.max(0, (window.innerHeight - stageRenderedH) / 2);
+    // Stage is anchored top-left (see .stage CSS), so the full vertical gap
+    // sits at the bottom instead of being split between top and bottom.
+    const bottomLetterbox = Math.max(0, window.innerHeight - stageRenderedH);
     const groundH = STAGE_GROUND_H * s + bottomLetterbox;
 
     const root = document.documentElement;
@@ -612,16 +614,24 @@
 
   function onCorrect() {
     setGameState("correct");
+
+    // Render the full evaluated expression in the success pill, replacing
+    // the in-progress chip chain. Format: "2×2×2 = 2³ = 8" using Unicode
+    // superscripts (the <sup> HTML tag was rendering oddly here — baselined
+    // digits with whitespace — because no ancestor .chip styling applied).
+    const lv = currentLevel();
+    const expansion = Array(lv.exponent).fill(lv.base).join("×");
+    dom.answerInner.textContent =
+      `${expansion} = ${lv.base}${toSuperscript(lv.exponent)} = ${lv.target}`;
+
     dom.answerBar.classList.add("success");
+    // Auto-hide the green result pill after a feedback delay. Without this,
+    // .success would linger until the next level loads (end of penguin walk).
+    setTimeout(() => dom.answerBar.classList.remove("success"), 1500);
     // Retrigger pulse + reveal cleanly even if classes linger from before.
     dom.targetCluster.classList.remove("pulse", "solved");
     void dom.targetCluster.offsetWidth;
     dom.targetCluster.classList.add("pulse", "solved");
-
-    // Pedagogical feedback: show the collapsed identity (e.g. "2×2×2 = 2³ = 8").
-    const lv = currentLevel();
-    const expansion = Array(lv.exponent).fill(lv.base).join("×");
-    flashToast(`${expansion} = ${lv.base}${toSuperscript(lv.exponent)} = ${lv.target}`, "good");
 
     audio.correct();
     playPenguinWalk("walk");

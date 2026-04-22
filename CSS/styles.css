@@ -30,7 +30,6 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
    independent of how the stage is scaled. */
 .viewport {
   position: fixed; inset: 0;
-  display: flex; align-items: center; justify-content: center;
 }
 /* Defaults for --stage-scale / --scene-ground-h live on <html> so JS can
    override them via documentElement.style.setProperty without being shadowed
@@ -41,10 +40,11 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
    overflow visible lets clouds drift naturally past the stage bounds into
    the pillar area over the viewport sky. */
 .stage {
-  position: relative;
+  position: absolute;
+  top: 0; left: 0;
   width: 1280px;
   height: 720px;
-  transform-origin: center center;
+  transform-origin: top left;
   overflow: visible;
   z-index: 1;
 }
@@ -192,18 +192,39 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 /* ==================================================================
    LEFT SIDEBAR
    ================================================================== */
-/* Sidebar is now a transparent rail so the sky reaches the screen edge.
-   The progress bar itself is the only thing that visually anchors this column. */
+/* Solid navy sidebar panel anchored to the left edge of the stage. The
+   progress rail reads against this panel, and the sky is pushed aside so
+   the sidebar forms a clear HUD column. */
 .sidebar {
   position: absolute;
   top: 0; bottom: 0; left: 0;
-  width: 64px;
-  background: transparent;
+  width: 92px;
+  background: linear-gradient(to bottom, #0f2447, #0a1a35);
   border-right: none;
-  box-shadow: none;
-  display: flex; flex-direction: column; align-items: center;
+  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 0;
-  z-index: 5;
+  z-index: 50;
+}
+
+/* Sidebar groups — distribute the three remaining HUD items (badge,
+   progress rail, infinity) evenly down the column. */
+.top-group {
+  margin-top: 16px;
+  margin-bottom: 12px;
+}
+.middle-group {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bottom-group {
+  margin-bottom: 16px;
 }
 
 /* Orange "x^2" badge — playful, high-contrast logo top-of-sidebar. */
@@ -259,49 +280,58 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
    sidebar column so it reads as a complete element instead of looking
    clipped by the stage edge. */
 .progress {
-  flex: 1;
-  margin: 16px 0;
-  align-self: stretch;
-  display: flex; justify-content: center;
+  height: 100%;
+  display: flex;
+  justify-content: center;
 }
 .progress__rail {
   position: relative;
-  width: 12px;
+  display: block;
+  width: 10px;
   height: 100%;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.45);
-  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.1);
+  margin: 6px auto;
+  background: linear-gradient(
+    to bottom,
+    #4f8fc8,
+    #2f6fa8
+  );
+  border-radius: 12px;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.35);
 }
 .progress__fill {
   position: absolute;
-  left: 0; right: 0; bottom: 0;
+  left: 50%;
+  bottom: 0;
+  width: 8px;
   height: 0%;
+  transform: translateX(-50%);
   background: linear-gradient(to top, #ff9800, #ffd54f);
   border-radius: 10px;
   transition: height 500ms cubic-bezier(.22,.88,.3,1.1);
-  box-shadow: 0 0 10px rgba(255,200,80,0.6);
+  box-shadow: 0 0 8px rgba(255, 180, 60, 0.6);
 }
 /* Chevron marker riding the fill — anchored just off the rail's right edge,
    so the pill stays readable and the arrow still points outward. */
 .progress__marker {
   position: absolute;
-  left: 100%;
-  bottom: 0;
+  top: 0;
+  left: 50%;
   width: 18px; height: 18px;
-  transform: translate(-2px, 50%);
+  transform: translate(-50%, -50%);
   background: #ffb238;
   clip-path: polygon(0 0, 100% 50%, 0 100%, 22% 50%);
-  transition: bottom 500ms cubic-bezier(.22,.88,.3,1.1);
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35));
 }
 
 .infinity {
-  color: #1e3a55;
-  font-size: 28px;
+  color: #8ec5ff;
+  font-size: 30px;
   font-weight: 900;
+  margin-top: 16px;
   margin-bottom: 10px;
-  opacity: 0.85;
-  text-shadow: 0 2px 2px rgba(255,255,255,0.55);
+  text-shadow:
+    0 0 3px rgba(120, 180, 255, 0.4),
+    0 0 6px rgba(120, 180, 255, 0.25);
 }
 
 /* ==================================================================
@@ -317,7 +347,10 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
   z-index: 2;
 }
 .cluster--source { left: 150px;  top: 150px; }
-.cluster--target { right: 150px; top: 150px; }
+/* Target cluster anchors to the viewport's right edge (150 stage-px inset),
+   not the stage's right edge. Keeps it visually symmetric with .cluster--source
+   on wider-than-16:9 windows where the stage doesn't fill the viewport width. */
+.cluster--target { right: calc(1430px - 100vw / var(--stage-scale, 1)); top: 150px; }
 
 /* Connector lines between beads — sits behind dots */
 .cluster__net {
@@ -391,7 +424,7 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 /* Target equation label — displays base^exponent beneath the target cluster */
 .target-label {
   position: absolute;
-  right: 150px;                 /* mirrors cluster--target right offset */
+  right: calc(1430px - 100vw / var(--stage-scale, 1)); /* mirrors cluster--target */
   top: 336px;                   /* just below the 180-tall cluster at top:150 */
   width: 180px;
   text-align: center;
@@ -419,10 +452,11 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
   50%     { color: #2f7a28; text-shadow: 0 0 10px rgba(100,230,100,0.7); }
 }
 
-/* Large translucent center arrow */
+/* Large translucent center arrow — horizontally pinned to viewport center
+   (not stage center) so it sits between source and target on any aspect. */
 .big-arrow {
   position: absolute;
-  left: 50%; top: 170px;
+  left: calc(50vw / var(--stage-scale, 1)); top: 170px;
   transform: translate(-50%, 0);
   width: 150px; height: 140px;
   background: rgba(40, 70, 100, 0.35);
@@ -478,10 +512,13 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 /* ==================================================================
    ANSWER BAR
    ================================================================== */
+/* Answer-bar sits just BELOW the level banner (stacked, never overlapping).
+   Hidden by default; JS adds .success / .error on submit to reveal it. The
+   level banner stays visible alongside — no swap, no :has() trickery. */
 .answer-bar {
-  position: absolute;
+  position: fixed;
+  top: 84px;
   left: 50%;
-  bottom: 190px;
   transform: translateX(-50%);
   min-width: 220px;
   height: 48px;
@@ -493,7 +530,22 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
     inset 0 -1px 0 rgba(0,0,0,0.08),
     0 2px 6px rgba(0,0,0,0.12);
   display: flex; align-items: center; justify-content: center;
-  z-index: 4;
+  z-index: 6;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity    200ms ease,
+    visibility 200ms ease,
+    background 200ms ease;
+}
+
+/* Result states: reveal the pill in its dedicated slot below the banner. */
+.answer-bar.success,
+.answer-bar.error {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 .answer-bar__inner {
   display: flex; align-items: center; gap: 10px;
@@ -555,9 +607,9 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
    MULTIPLIER TILES
    ================================================================== */
 .multipliers {
-  position: absolute;
+  position: fixed;
+  bottom: 120px;
   left: 50%;
-  bottom: 100px;
   transform: translateX(-50%);
   display: flex; gap: 12px;
   z-index: 4;
@@ -628,7 +680,7 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 .action-btn {
   position: absolute;
   left: 96px;
-  bottom: 86px;
+  bottom: 90px;
   width: 62px; height: 62px;
   /* Circular green play button (borrowed from reference layout) */
   background: linear-gradient(#5fe075, #2eaf4b);
@@ -688,26 +740,26 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
    ================================================================== */
 .undo-btn {
   position: absolute;
-  right: 70px;
-  bottom: 86px;
-  width: 62px; height: 62px;
+  right: 20px;
+  bottom: 90px;
+  width: 56px; height: 56px;
   border-radius: 50%;
-  background: linear-gradient(#49c0ff, #1e9be6);
-  box-shadow: 0 4px 0 #1476b2, 0 6px 12px rgba(0,0,0,0.28);
+  background: #5f8ea8;
+  box-shadow: 0 4px 0 #3e6577, 0 6px 12px rgba(0,0,0,0.28);
   display: flex; align-items: center; justify-content: center;
   padding: 0;
   transition: transform 150ms ease, box-shadow 150ms ease, filter 120ms ease;
   overflow: hidden;
-  z-index: 4;
+  z-index: 1000;
 }
 .undo-btn:hover {
   filter: brightness(1.06);
   transform: translateY(-2px);
-  box-shadow: 0 6px 0 #1476b2, 0 10px 16px rgba(0,0,0,0.32);
+  box-shadow: 0 6px 0 #3e6577, 0 10px 16px rgba(0,0,0,0.32);
 }
 .undo-btn:active {
   transform: translateY(3px);
-  box-shadow: 0 1px 0 #1476b2, 0 3px 6px rgba(0,0,0,0.28);
+  box-shadow: 0 1px 0 #3e6577, 0 3px 6px rgba(0,0,0,0.28);
 }
 .undo-btn.disabled { filter: grayscale(0.55) brightness(0.9); pointer-events: none; }
 
@@ -729,15 +781,15 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
    ================================================================== */
 .pause-btn {
   position: absolute;
-  top: 18px; right: 20px;
-  width: 42px; height: 42px;
+  top: 20px; right: 20px;
+  width: 48px; height: 48px;
   border-radius: 12px;
   background: #ffffff;
   display: flex; align-items: center; justify-content: center;
   gap: 5px;
   box-shadow: 0 4px 0 #b8c5d6, 0 6px 10px rgba(0,0,0,0.18);
   transition: transform 140ms ease, box-shadow 140ms ease;
-  z-index: 7;
+  z-index: 1000;
 }
 .pause-btn:hover {
   transform: translateY(-2px);
@@ -780,12 +832,12 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
    MODAL
    ================================================================== */
 .modal {
-  position: absolute; inset: 0;
+  position: fixed; inset: 0;
   background: rgba(10, 30, 50, 0.55);
   backdrop-filter: blur(2px);
   display: none;
   align-items: center; justify-content: center;
-  z-index: 20;
+  z-index: 2000;
 }
 .modal.show { display: flex; }
 
@@ -904,18 +956,18 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
    LEVEL BANNER (top-center pill)
    ================================================================== */
 .level-banner {
-  position: absolute;
-  top: 18px;
+  position: fixed;
+  top: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #ffffff;
+  background: #e6edf3;
   color: #1e3a55;
   padding: 9px 24px;
   border-radius: 22px;
   font-weight: 800;
   font-size: 16px;
   letter-spacing: 0.5px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.8);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.15);
   z-index: 6;
   pointer-events: none;
   white-space: nowrap;
