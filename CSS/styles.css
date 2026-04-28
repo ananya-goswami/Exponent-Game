@@ -742,7 +742,7 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 .undo-btn {
   position: absolute;
   right: 20px;
-  bottom: 90px;
+  bottom: calc(var(--scene-ground-h, 86px) + 4px * var(--stage-scale, 1));
   width: 56px; height: 56px;
   border-radius: 50%;
   background: #5f8ea8;
@@ -809,7 +809,7 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
    TOAST
    ================================================================== */
 .toast {
-  position: absolute;
+  position: fixed;
   top: 24px; left: 50%;
   transform: translate(-50%, -40px);
   background: rgba(30, 58, 85, 0.9);
