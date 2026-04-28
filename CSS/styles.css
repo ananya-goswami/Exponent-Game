@@ -129,8 +129,8 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
   position: absolute;
   left: 90px;           /* start just past the sidebar */
   bottom: -30px;        /* sink empty space below the feet so they sit on grass */
-  width: 72px;
-  height: 192px;        /* 72:192 = 3:8, matches frame aspect */
+  width: 101px;
+  height: 269px;        /* 72:192 = 3:8, matches frame aspect */
   opacity: 0;
   pointer-events: none;
   z-index: 3;
@@ -138,7 +138,7 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 }
 .penguin-walker.walking {
   opacity: 1;
-  animation: walkCross 8s linear forwards;    /* slow stroll on correct */
+  animation: walkCross 6.4s linear forwards;    /* slow stroll on correct */
 }
 @keyframes walkCross {
   0%   { transform: translateX(0);      opacity: 1; }
@@ -149,7 +149,7 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 /* On a wrong answer: walks halfway, hesitates, then runs back and exits left. */
 .penguin-walker.retreating {
   opacity: 1;
-  animation: walkRetreat 3s linear forwards;
+  animation: walkRetreat 2.4s linear forwards;
 }
 @keyframes walkRetreat {
   0%   { transform: translateX(0);     opacity: 1; }
@@ -160,27 +160,28 @@ button:focus-visible { outline: 2px solid #ffd93d; outline-offset: 2px; }
 }
 
 .penguin {
-  width: 72px;
-  height: 192px;
+  width: 101px;
+  height: 269px;
   background-image: url("../Assets/penguin sprite.png");
-  /* 4 frames x 72px wide each = 288px total width, full container height. */
-  background-size: 288px 192px;
+  /* 4 frames × 101px wide each = 404px total sprite-sheet width, 269px tall.
+     Both axes scaled 1.4× from the original 288×192. */
+  background-size: 404px 269px;
   background-position: 0 0;
   background-repeat: no-repeat;
   filter: drop-shadow(0 3px 2px rgba(0,0,0,0.25));
   /* mix-blend-mode: screen;  <-- only if sprite has a black bg, not alpha */
 }
 .penguin-walker.walking .penguin {
-  animation: walkCycle 0.8s steps(4) infinite;        /* relaxed step cadence */
+  animation: walkCycle 0.64s steps(4) infinite;        /* relaxed step cadence */
 }
 /* During retreat, legs cycle slightly faster AND the sprite flips at the turn. */
 .penguin-walker.retreating .penguin {
-  animation: walkCycle 0.5s steps(4) infinite,
-             penguinFlip 3s linear forwards;
+  animation: walkCycle 0.4s steps(4) infinite,
+             penguinFlip 2.4s linear forwards;
 }
 @keyframes walkCycle {
   from { background-position-x: 0; }
-  to   { background-position-x: -288px; }
+  to   { background-position-x: -404px; }
 }
 /* Instantaneous flip around the halfway pause so the penguin faces left
    when it runs back. Values hold on either side of the flip frame. */

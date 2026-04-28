@@ -1,6 +1,23 @@
 /* ==================================================================
-   script.js — Multiplication Puzzle Game
+   script.js — Exponent Puzzle Game
    Vanilla JS. Relies on levels.js (window.LEVELS).
+
+   v2.1 — Replaces the old "fly chip → resize source" tap feedback with
+   a bread-meets-operator animation where n copies ORBIT the ×n operator
+   in a locked wheel before merging back into one bigger bread:
+
+       1. Source bread sits where it was
+       2. ×n operator pops in to its right, close enough that the bread
+          looks attached to its left side
+       3. n-1 additional copies fade in around the operator at equal
+          angular spacing (180° apart for ×2, 120° for ×3, etc.)
+       4. The whole wheel of n copies orbits around the operator center
+          for one full revolution (~1.2s), copies stay axis-aligned
+       5. Operator fades; copies converge back to the source slot
+       6. The real source cluster is re-rendered with count × n
+
+   The math is unchanged — each tap multiplies the visible bread by the
+   level's base, so n taps build base^n. Only the visual feedback changed.
    ================================================================== */
 
 (function () {
@@ -8,8 +25,6 @@
 
   /* ------------------------------------------------------------
      Sound engine — Web Audio synth, no external assets.
-     First play lazily creates the AudioContext so browser autoplay
-     policies are respected. Each helper is one short, cheerful sound.
      ------------------------------------------------------------ */
   const audio = (function () {
     let ctx = null;
@@ -25,7 +40,6 @@
       return ctx;
     }
 
-    // A single enveloped tone. Optional `fromFreq` makes it a pitch slide.
     function tone(freq, duration, opts) {
       if (muted) return;
       const c = getCtx(); if (!c) return;
@@ -50,7 +64,6 @@
       osc.stop(t0 + duration + 0.05);
     }
 
-    // Schedule a tone at a relative delay (ms) so arpeggios don't need setTimeout.
     function toneAt(delayMs, freq, duration, opts) {
       setTimeout(() => tone(freq, duration, opts), delayMs);
     }
@@ -59,44 +72,28 @@
       isMuted() { return muted; },
       setMuted(v) { muted = !!v; },
       toggleMuted() { muted = !muted; return muted; },
-
-      // Playful rising pop on multiplier tap
-      tap() {
-        tone(1100, 0.09, { fromFreq: 600, type: "sine", vol: 0.22 });
+      tap()    { tone(1100, 0.09, { fromFreq: 600,  type: "sine",     vol: 0.22 }); },
+      // Fired the moment the orbit begins — a bright pop with sparkle.
+      split()  {
+        tone( 720, 0.10, { type: "triangle", vol: 0.18 });
+        toneAt(40, 1180, 0.18, { type: "sine", vol: 0.10, attack: 0.01 });
       },
-
-      // Magical "ding" when the exponent bumps up (arrives with the chip)
       bump(exp) {
-        // Higher exponents ding a little higher — builds the sense of climbing
-        const base = 1175;                  // D6
-        const f = base * Math.pow(1.122, Math.max(0, exp - 1)); // up a semitone each step
+        const base = 1175;
+        const f = base * Math.pow(1.122, Math.max(0, exp - 1));
         tone(f,        0.18, { type: "triangle", vol: 0.17 });
         tone(f * 1.5,  0.22, { type: "sine",     vol: 0.08, attack: 0.02 });
       },
-
-      // Ascending major arpeggio on correct answer — C5, E5, G5, C6
       correct() {
         const n = [523.25, 659.25, 783.99, 1046.50];
         n.forEach((f, i) => toneAt(i * 75, f, 0.28, { type: "triangle", vol: 0.2 }));
       },
-
-      // Funny sad-trombone descending slide on wrong answer
       wrong() {
         tone(185, 0.55, { fromFreq: 440, type: "sawtooth", vol: 0.16, attack: 0.03 });
         toneAt(120, 165, 0.45, { fromFreq: 392, type: "sawtooth", vol: 0.12, attack: 0.03 });
       },
-
-      // Soft click on undo
-      undo() {
-        tone(380, 0.08, { fromFreq: 620, type: "sine", vol: 0.12 });
-      },
-
-      // Short UI click for buttons (pause, resume, next, etc.)
-      click() {
-        tone(820, 0.05, { type: "square", vol: 0.07 });
-      },
-
-      // Extended fanfare on full game completion
+      undo()   { tone(380, 0.08, { fromFreq: 620, type: "sine", vol: 0.12 }); },
+      click()  { tone(820, 0.05, { type: "square", vol: 0.07 }); },
       celebrate() {
         const n = [523.25, 659.25, 783.99, 1046.50, 1318.51];
         n.forEach((f, i) => toneAt(i * 110, f, 0.36, { type: "triangle", vol: 0.22 }));
@@ -110,13 +107,40 @@
      ------------------------------------------------------------ */
   const STAGE_W = 1280;
   const STAGE_H = 720;
-
-  // Cluster container is 180x180 (see CSS). Layout coords are percentages
-  // within that box so they scale uniformly.
   const CLUSTER_SIZE = 180;
 
-  // Dot layout templates keyed by count. Each value is [x%, y%] inside the
-  // cluster box. Hand-tuned for small counts so patterns read naturally.
+  /* ---- Bread-multiply animation tuning (single source of truth) ---- */
+  const ANIM = {
+    // Geometry
+    ORBIT_RADIUS:           145,
+    OP_SIZE:                 88,
+    COPY_SCALE:            0.92,
+
+    // Phase A — operator pops in
+    DUR_OP_IN:              280,
+    // Phase B — additional copies fade in at orbit positions
+    DUR_EMERGE:             280,
+    // Phase C — orbital rotation (linear easing, full radius)
+    DUR_ROTATE:            1600,    // ~33% slower than v2.1 (was 1200ms)
+    REVOLUTIONS:            1.0,
+    // Phase D — spiral inward: copies continue rotating while their orbit
+    // radius shrinks to 0 and the orbit center drifts from operator center
+    // to the source slot. Convergence point is the source slot, where
+    // the new bread blooms in.
+    DUR_SPIRAL:             720,
+    SPIRAL_EXTRA_ROT:  Math.PI,     // additional rotation during spiral (½ revolution)
+    // Phase E — new bread blooms in at source slot. Triggered partway
+    // through the spiral so spiraling copies and the blooming bread
+    // overlap visually.
+    DUR_BREAD_FORM:         520,
+    BREAD_FORM_OFFSET_PCT: 0.45,    // bread starts forming this far into the spiral
+    // Phase F — operator fades out (covers the whole spiral phase)
+    DUR_OP_OUT:             720,
+    // Phase G — cleanup
+    DUR_SETTLE:              80
+  };
+
+  // Dot layout templates — unchanged from v1.
   const CLUSTER_PATTERNS = {
     1:  [[50,50]],
     2:  [[50,32],[50,68]],
@@ -125,40 +149,39 @@
     5:  [[50,50],[28,28],[72,28],[28,72],[72,72]],
     6:  [[33,33],[50,33],[67,33],[33,67],[50,67],[67,67]],
     7:  [[33,28],[50,28],[67,28],[50,50],[33,72],[50,72],[67,72]],
-    // 2³ — two 2x2 squares side-by-side; the gap reveals "2 × 2²".
     8:  [[22,30],[42,30],[22,60],[42,60], [58,30],[78,30],[58,60],[78,60]],
     9:  [[30,30],[50,30],[70,30],[30,50],[50,50],[70,50],[30,70],[50,70],[70,70]],
     10: [[30,25],[50,25],[70,25],[30,45],[50,45],[70,45],[30,65],[50,65],[70,65],[50,85]]
   };
 
-  // Edges (pairs of point indices) per count. Gives each number a readable
-  // geometric shape — a thread through the beads — without adding clutter.
-  // Edges are drawn behind the dots at low opacity.
   const CLUSTER_EDGES = {
     1:  [],
     2:  [[0,1]],
-    3:  [[0,1],[1,2],[2,0]],                       // triangle
-    4:  [[0,1],[1,3],[3,2],[2,0]],                 // square outline
-    5:  [[0,1],[0,2],[0,3],[0,4]],                 // center spokes (quincunx)
-    6:  [[0,1],[1,2],[3,4],[4,5],[0,3],[1,4],[2,5]], // 2x3 grid
-    7:  [[0,1],[1,2],[1,3],[3,5],[4,5],[5,6]],     // top row, spine, bottom row
-    // 2³ — two independent 2x2 squares; each outlined so the power structure reads
+    3:  [[0,1],[1,2],[2,0]],
+    4:  [[0,1],[1,3],[3,2],[2,0]],
+    5:  [[0,1],[0,2],[0,3],[0,4]],
+    6:  [[0,1],[1,2],[3,4],[4,5],[0,3],[1,4],[2,5]],
+    7:  [[0,1],[1,2],[1,3],[3,5],[4,5],[5,6]],
     8:  [[0,1],[1,3],[3,2],[2,0], [4,5],[5,7],[7,6],[6,4]],
-    9:  [[0,1],[1,2],[2,5],[5,8],[8,7],[7,6],[6,3],[3,0],  // 3x3 ring
-         [4,1],[4,3],[4,5],[4,7]],                 // + spokes from center
-    10: [[0,1],[1,2],[2,5],[5,8],[8,9],[9,7],[7,6],[6,3],[3,0], // outer ring
-         [4,1],[4,3],[4,5],[4,7]]                  // + center spokes
+    9:  [[0,1],[1,2],[2,5],[5,8],[8,7],[7,6],[6,3],[3,0],
+         [4,1],[4,3],[4,5],[4,7]],
+    10: [[0,1],[1,2],[2,5],[5,8],[8,9],[9,7],[7,6],[6,3],[3,0],
+         [4,1],[4,3],[4,5],[4,7]]
   };
 
   /* ------------------------------------------------------------
      Game state
+       `animating` is the lock that keeps the player from firing a
+       second multiply mid-animation. All input handlers short-circuit
+       on it.
      ------------------------------------------------------------ */
   const game = {
     levelIndex: 0,
-    state: "loading",            // loading|ready|buildingAnswer|checking|correct|incorrect|levelComplete|paused|gameComplete
-    selected: [],                // chosen multipliers (e.g. [2,2])
-    currentSourceCount: 0,       // visual count (animates during solve)
-    levels: window.LEVELS || []
+    state: "loading",
+    selected: [],
+    currentSourceCount: 0,
+    levels: window.LEVELS || [],
+    animating: false
   };
 
   /* ------------------------------------------------------------
@@ -184,7 +207,7 @@
     playAgainBtn:   $("playAgainBtn"),
     progressFill:   $("progressFill"),
     progressMarker: $("progressMarker"),
-    flyChip:        $("flyChip"),
+    flyChip:        $("flyChip"),       // kept for backwards compat — unused now
     toast:          $("toast"),
     penguinWalker:  $("penguinWalker"),
     targetLabel:    $("targetLabel"),
@@ -194,29 +217,15 @@
     tutorialStartBtn: $("tutorialStartBtn")
   };
 
-  /* Unicode superscript glyphs for the target label (avoids font quirks
-     around <sup> sizing at very small CSS sizes). */
   const SUPER = { 0:"⁰",1:"¹",2:"²",3:"³",4:"⁴",5:"⁵",6:"⁶",7:"⁷",8:"⁸",9:"⁹" };
   function toSuperscript(n) {
     return String(n).split("").map((d) => SUPER[d] || d).join("");
   }
 
   /* ------------------------------------------------------------
-     Utility: scale fixed-size stage to fit window.
-
-     Also publishes two CSS custom properties used by the viewport-level
-     scene backdrop (see .scene-sky / .scene-ground in CSS):
-       --stage-scale        the current min-fit scale factor
-       --scene-ground-h     the height, in CSS px, of the bottom green band
-                            at the viewport level. It equals the original
-                            86 stage-px ground scaled by `s`, plus any
-                            bottom letterbox that exists on tall viewports,
-                            so the green always reaches the viewport bottom
-                            and visually meets where the stage's ground
-                            used to sit.
+     Stage scaling — unchanged
      ------------------------------------------------------------ */
-  const STAGE_GROUND_H = 86; // stage-coord height of the ground band
-
+  const STAGE_GROUND_H = 86;
   function fitStage() {
     const sx = window.innerWidth  / STAGE_W;
     const sy = window.innerHeight / STAGE_H;
@@ -224,8 +233,6 @@
     dom.stage.style.transform = `scale(${s})`;
 
     const stageRenderedH = STAGE_H * s;
-    // Stage is anchored top-left (see .stage CSS), so the full vertical gap
-    // sits at the bottom instead of being split between top and bottom.
     const bottomLetterbox = Math.max(0, window.innerHeight - stageRenderedH);
     const groundH = STAGE_GROUND_H * s + bottomLetterbox;
 
@@ -236,14 +243,8 @@
   window.addEventListener("resize", fitStage);
 
   /* ------------------------------------------------------------
-     Cluster rendering
-     renderCluster(container, count, type)
-       container: DOM element (cluster box)
-       count: integer >= 0
-       type: "source" | "target"
+     Cluster rendering — unchanged
      ------------------------------------------------------------ */
-  // Find factor pair (rows, cols) closest to a square — gives power structure
-  // a clean grid read (e.g. 2⁴=16 → 4×4, 3³=27 → 3×9, 2⁵=32 → 4×8).
   function gridFactor(n) {
     let rows = 1;
     for (let r = Math.floor(Math.sqrt(n)); r >= 1; r--) {
@@ -266,8 +267,6 @@
     return pts;
   }
 
-  // Pick a bead scale that keeps dots inside their grid cells for dense
-  // clusters (64, 81, …) while leaving small counts at their natural size.
   function computeDotScale(count) {
     if (count <= 9)  return 1;
     if (count <= 16) return 0.85;
@@ -278,16 +277,13 @@
     return 0.4;
   }
 
-  // Compute grid-neighbor edges for auto-layout fallback (count > 10).
-  // Connects each point to its right neighbor and its down neighbor.
   function buildGridEdges(count) {
     const cols = Math.ceil(Math.sqrt(count));
     const edges = [];
     for (let i = 0; i < count; i++) {
-      const r = Math.floor(i / cols);
       const c = i % cols;
-      if (c < cols - 1 && i + 1 < count)    edges.push([i, i + 1]);       // right
-      if (i + cols < count)                 edges.push([i, i + cols]);    // down
+      if (c < cols - 1 && i + 1 < count)    edges.push([i, i + 1]);
+      if (i + cols < count)                 edges.push([i, i + cols]);
     }
     return edges;
   }
@@ -296,12 +292,9 @@
     container.innerHTML = "";
     if (count <= 0) return;
 
-    // Scale dots to fit dense grids (e.g. 8×8 = 64, 9×9 = 81).
     const dotScale = computeDotScale(count);
-
     const pts = buildClusterLayout(count);
 
-    // --- Draw the connector "thread" (SVG) behind the dots ---
     const edges = CLUSTER_EDGES[count] || buildGridEdges(count);
     if (edges.length) {
       const svgNS = "http://www.w3.org/2000/svg";
@@ -317,14 +310,12 @@
         line.setAttribute("y1", y1);
         line.setAttribute("x2", x2);
         line.setAttribute("y2", y2);
-        // Lines appear just after the first few dots pop in
         line.style.animationDelay = (80 + i * 20) + "ms";
         svg.appendChild(line);
       });
       container.appendChild(svg);
     }
 
-    // --- Draw the beads (dots) on top ---
     pts.forEach(([x, y], i) => {
       const dot = document.createElement("div");
       dot.className = "unit";
@@ -332,20 +323,17 @@
       dot.style.top  = y + "%";
       dot.style.transform = `translate(-50%, -50%) scale(${dotScale})`;
       dot.style.animationDelay = (i * 15) + "ms";
-      // Per-bead index drives the staggered reveal on correct answers.
       dot.style.setProperty("--idx", i);
       container.appendChild(dot);
     });
   }
 
   /* ------------------------------------------------------------
-     Level loading / rendering
+     Level loading — unchanged
      ------------------------------------------------------------ */
   function currentLevel() { return game.levels[game.levelIndex]; }
 
   function loadLevel(index) {
-    // Drop any pending auto-advance listener from the previous level so we
-    // never stack handlers across multiple level transitions.
     clearPenguinWalkEndListener();
     if (index >= game.levels.length) {
       setGameState("gameComplete");
@@ -359,29 +347,18 @@
     updateProgress();
   }
 
-  // ------------------------------------------------------------
-  //  Auto-advance: when the penguin finishes its cross-walk after a correct
-  //  answer, the next level loads automatically. No click required.
-  //  The handler is kept in a module variable so we can cancel a stale
-  //  registration before attaching a new one.
-  // ------------------------------------------------------------
   let pendingWalkEndHandler = null;
-
   function clearPenguinWalkEndListener() {
     if (pendingWalkEndHandler && dom.penguinWalker) {
       dom.penguinWalker.removeEventListener("animationend", pendingWalkEndHandler);
     }
     pendingWalkEndHandler = null;
   }
-
   function onPenguinWalkEnd(callback) {
     const el = dom.penguinWalker;
     if (!el) { callback(); return; }
     clearPenguinWalkEndListener();
     pendingWalkEndHandler = (e) => {
-      // The walker hosts the forward `walkCross` animation; its inner sprite
-      // hosts the infinite `walkCycle` (which never fires animationend) and,
-      // on retreat, `walkRetreat` / `penguinFlip`. Only match `walkCross`.
       if (e.animationName !== "walkCross") return;
       clearPenguinWalkEndListener();
       callback();
@@ -389,9 +366,6 @@
     el.addEventListener("animationend", pendingWalkEndHandler);
   }
 
-  // Centralized advance — guards against double-trigger by requiring the
-  // levelComplete state. `loadLevel` immediately resets state to "ready"
-  // (or "gameComplete"), so any later re-entry is a no-op.
   function goToNextLevel() {
     if (game.state !== "levelComplete") return;
     loadLevel(game.levelIndex + 1);
@@ -399,7 +373,6 @@
 
   function renderLevel() {
     const lv = currentLevel();
-    // Clear any leftover solved/pulse state from a prior level.
     dom.targetCluster.classList.remove("solved", "pulse");
     renderCluster(dom.sourceCluster, lv.source);
     renderCluster(dom.targetCluster, lv.target);
@@ -410,14 +383,12 @@
     dom.answerBar.classList.remove("error","success","shake");
   }
 
-  // Shows the level's goal equation (e.g. "2³") under the target cluster.
   function renderTargetLabel() {
     const lv = currentLevel();
     if (!dom.targetLabel) return;
     dom.targetLabel.innerHTML = `${lv.base}<sup>${lv.exponent}</sup>`;
   }
 
-  // Top-center banner — shows current level and target equation.
   function renderLevelBanner() {
     const lv = currentLevel();
     if (!dom.levelBanner) return;
@@ -426,9 +397,7 @@
   }
 
   /* ------------------------------------------------------------
-     Multiplier buttons — kid-friendly 4-choice row (×2, ×3, ×4, ×5).
-     Only the level's base advances the puzzle; wrong picks shake &
-     play the wrong-sound, matching the reference layout's UX.
+     Multiplier buttons
      ------------------------------------------------------------ */
   const MULTIPLIER_CHOICES = [2, 3, 4, 5];
 
@@ -445,9 +414,10 @@
   }
 
   function onMultiplierClick(m, btnEl) {
+    if (game.animating) return;
     if (game.state !== "ready" && game.state !== "buildingAnswer") return;
+
     const lv = currentLevel();
-    // Not the level's base → reject with shake + wrong sound, don't mutate state.
     if (!lv.allowedMultipliers.includes(m)) {
       if (btnEl) {
         btnEl.classList.remove("shake");
@@ -463,7 +433,7 @@
   }
 
   /* ------------------------------------------------------------
-     Add/undo multiplier (the answer builder)
+     Add/undo multiplier
      ------------------------------------------------------------ */
   function addMultiplier(m, btnEl) {
     const lv = currentLevel();
@@ -476,37 +446,23 @@
     game.selected.push(m);
     setGameState("buildingAnswer");
 
-    // Quick pop on tap, magical ding when the chip arrives on source.
     audio.tap();
-    setTimeout(() => audio.bump(game.selected.length), 380);
 
-    // Briefly mark button "selected" for press feedback.
     if (btnEl) {
       btnEl.classList.add("selected");
       setTimeout(() => btnEl.classList.remove("selected"), 180);
     }
 
     renderAnswerBar();
-
-    // Fly a chip from the tapped button onto the source cluster,
-    // then grow the source cluster to reflect the multiplication.
-    animateChipToSource(m, btnEl, () => {
-      const newCount = game.currentSourceCount * m;
-      game.currentSourceCount = newCount;
-      renderCluster(dom.sourceCluster, newCount);
-      dom.sourceCluster.classList.remove("flash");
-      // Force reflow before re-adding the class so animation restarts.
-      void dom.sourceCluster.offsetWidth;
-      dom.sourceCluster.classList.add("flash");
-    });
+    animateBreadMultiply(m);
   }
 
   function undoMultiplier() {
+    if (game.animating) return;
     if (game.selected.length === 0) return;
     audio.undo();
     game.selected.pop();
 
-    // Recompute source visual count from scratch.
     const lv = currentLevel();
     let count = lv.source;
     game.selected.forEach((m) => (count *= m));
@@ -519,15 +475,11 @@
   }
 
   /* ------------------------------------------------------------
-     Answer bar render — single "× base^n" chip.
-     Each tap increments the exponent rather than appending a chip,
-     teaching that repeated multiplication collapses into exponent
-     notation (2 × 2 × 2 === 2³).
+     Answer bar render — unchanged
      ------------------------------------------------------------ */
   function renderAnswerBar() {
     dom.answerInner.innerHTML = "";
 
-    // Show exponent chip if user has made at least one tap.
     if (game.selected.length > 0) {
       const base = game.selected[0];
       const exp  = game.selected.length;
@@ -542,46 +494,216 @@
     updateUndoButton();
   }
 
-  /* ------------------------------------------------------------
-     Fly-chip animation
-     ------------------------------------------------------------ */
-  function animateChipToSource(m, fromEl, onArrive) {
-    const chip = dom.flyChip;
-    chip.textContent = `× ${m}`;
+  /* ==================================================================
+     BREAD × OPERATOR ANIMATION (orbit edition)
+     ==================================================================
+     n copies of the source bread orbit around a central ×n operator
+     for one full revolution, then converge into one merged bread at
+     the source slot. Copies stay axis-aligned during the orbit — only
+     their POSITIONS rotate, like satellites.
+     ================================================================== */
 
-    // Compute start and end positions in stage coordinates.
+  // Convert a stage element to its (left, top) in stage coordinates,
+  // accounting for the current stage scale.
+  function stagePosOf(el) {
     const stageRect = dom.stage.getBoundingClientRect();
     const stageScale = stageRect.width / STAGE_W;
+    const r = el.getBoundingClientRect();
+    return {
+      left: (r.left - stageRect.left) / stageScale,
+      top:  (r.top  - stageRect.top)  / stageScale
+    };
+  }
 
-    let startX = 600, startY = 550;
-    if (fromEl) {
-      const r = fromEl.getBoundingClientRect();
-      startX = (r.left - stageRect.left) / stageScale + r.width  / (2 * stageScale) - 20;
-      startY = (r.top  - stageRect.top)  / stageScale + r.height / (2 * stageScale) - 17;
+  function animateBreadMultiply(m) {
+    game.animating = true;
+
+    // ---- Geometry (stage coords) ----
+    const src = stagePosOf(dom.sourceCluster);
+    const srcCx = src.left + CLUSTER_SIZE / 2;
+    const srcCy = src.top  + CLUSTER_SIZE / 2;
+    const orbitR = ANIM.ORBIT_RADIUS;
+
+    // Operator center sits exactly orbitR right of source slot, so the
+    // copy at angle π lines up perfectly with the source.
+    const opCx = srcCx + orbitR;
+    const opCy = srcCy;
+
+    const beforeCount = game.currentSourceCount;
+    const afterCount  = beforeCount * m;
+
+    // The orbit takes over the source visually — hide the real cluster.
+    dom.sourceCluster.style.visibility = "hidden";
+
+    // ---- Operator ring ----
+    const opRing = document.createElement("div");
+    opRing.className = "op-ring";
+    opRing.style.width  = ANIM.OP_SIZE + "px";
+    opRing.style.height = ANIM.OP_SIZE + "px";
+    opRing.style.left   = (opCx - ANIM.OP_SIZE / 2) + "px";
+    opRing.style.top    = (opCy - ANIM.OP_SIZE / 2) + "px";
+    opRing.innerHTML    = `<span>×${m}</span>`;
+    opRing.style.opacity   = "0";
+    opRing.style.transform = "scale(0.5)";
+    dom.stage.appendChild(opRing);
+
+    // ---- Starting angles ----
+    // Copy 0 at angle π (left of operator = source slot). Remaining copies
+    // are equally spaced around the operator.
+    const startAngles = [];
+    for (let i = 0; i < m; i++) {
+      startAngles.push(Math.PI + i * (2 * Math.PI / m));
     }
-    const srcRect = dom.sourceCluster.getBoundingClientRect();
-    const endX = (srcRect.left - stageRect.left) / stageScale + 90 - 20;
-    const endY = (srcRect.top  - stageRect.top)  / stageScale + 90 - 17;
 
-    // Reset position (no transition), then animate on next frame.
-    chip.style.transition = "none";
-    chip.style.left = startX + "px";
-    chip.style.top  = startY + "px";
-    chip.classList.add("active");
-    chip.style.transform = "scale(0.8)";
+    // ---- Copies, positioned at their starting orbit angles ----
+    const copies = [];
+    for (let i = 0; i < m; i++) {
+      const c = document.createElement("div");
+      c.className = "cluster cluster--copy";
+      c.style.left = (opCx - CLUSTER_SIZE / 2) + "px";
+      c.style.top  = (opCy - CLUSTER_SIZE / 2) + "px";
+      const a = startAngles[i];
+      c.style.transform = `translate(${Math.cos(a) * orbitR}px, ${Math.sin(a) * orbitR}px) scale(${ANIM.COPY_SCALE})`;
+      c.style.opacity = (i === 0) ? "1" : "0";
+      dom.stage.appendChild(c);
+      renderCluster(c, beforeCount);
+      copies.push(c);
+    }
 
-    requestAnimationFrame(() => {
-      chip.style.transition = "all 380ms cubic-bezier(.3,.8,.3,1)";
-      chip.style.left = endX + "px";
-      chip.style.top  = endY + "px";
-      chip.style.transform = "scale(1.1)";
-    });
+    // ---- PHASE A — operator pops in, additional copies fade in ----
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      opRing.style.transition =
+        `opacity ${ANIM.DUR_OP_IN}ms ease, ` +
+        `transform ${ANIM.DUR_OP_IN + 80}ms cubic-bezier(.3,.8,.3,1.5)`;
+      opRing.style.opacity   = "1";
+      opRing.style.transform = "scale(1)";
 
+      copies.forEach((c, i) => {
+        if (i === 0) return;
+        c.style.transition = `opacity ${ANIM.DUR_EMERGE}ms ease`;
+        c.style.transitionDelay = `${Math.max(0, ANIM.DUR_OP_IN - 80) + i * 30}ms`;
+        c.style.opacity = "1";
+      });
+    }));
+
+    // ---- PHASE B — orbital rotation (LINEAR easing for steady speed) ----
+    const tRotate = ANIM.DUR_OP_IN + ANIM.DUR_EMERGE;
     setTimeout(() => {
-      chip.classList.remove("active");
-      chip.style.transform = "scale(0.4)";
-      if (onArrive) onArrive();
-    }, 420);
+      audio.split();
+      copies.forEach(c => { c.style.transition = "none"; void c.offsetWidth; });
+
+      const t0 = performance.now();
+      const totalAngle = ANIM.REVOLUTIONS * 2 * Math.PI;
+
+      const tickRotate = (now) => {
+        const elapsed = now - t0;
+        const p = Math.min(1, elapsed / ANIM.DUR_ROTATE);
+        // Linear easing — constant angular velocity, blends naturally
+        // into the spiral phase that takes over next.
+        const phase = p * totalAngle;
+
+        copies.forEach((c, i) => {
+          const a = startAngles[i] + phase;
+          c.style.transform =
+            `translate(${Math.cos(a) * orbitR}px, ${Math.sin(a) * orbitR}px) scale(${ANIM.COPY_SCALE})`;
+        });
+
+        if (p < 1 && game.animating) requestAnimationFrame(tickRotate);
+      };
+      requestAnimationFrame(tickRotate);
+    }, tRotate);
+
+    // ---- PHASE D — spiral inward to source slot ----
+    // Each frame, copies are positioned around an "effective orbit center"
+    // that drifts from operator center → source slot, with an "effective
+    // radius" that shrinks from orbitR → 0, plus continued rotation.
+    // Net effect: curving inward paths converging on the source slot.
+    const tSpiral = tRotate + ANIM.DUR_ROTATE;
+    setTimeout(() => {
+      // Operator dissolves over the entire spiral phase.
+      opRing.style.transition =
+        `opacity ${ANIM.DUR_OP_OUT}ms ease, ` +
+        `transform ${ANIM.DUR_OP_OUT}ms ease`;
+      opRing.style.opacity = "0";
+      opRing.style.transform = "scale(1.4)";
+
+      const t0 = performance.now();
+      const finalPhase = ANIM.REVOLUTIONS * 2 * Math.PI;
+      const extraRot = ANIM.SPIRAL_EXTRA_ROT;
+
+      const tickSpiral = (now) => {
+        const elapsed = now - t0;
+        const p = Math.min(1, elapsed / ANIM.DUR_SPIRAL);
+        // Ease-out cubic — starts at full angular velocity (matching the
+        // end of the linear-easing rotation), decelerates as radius shrinks.
+        const eased = 1 - Math.pow(1 - p, 3);
+
+        const radiusNow = orbitR * (1 - eased);
+        const phaseNow  = finalPhase + eased * extraRot;
+        const driftX    = -orbitR * eased;             // orbit center drifts → source slot
+        const scaleNow  = ANIM.COPY_SCALE * (1 - 0.45 * eased);
+        // Opacity: full for first half, fading in second half so the
+        // new bread (which forms during this phase) takes visual primacy.
+        const opNow = p < 0.5 ? 1.0 : Math.max(0.25, 1.0 - (p - 0.5) * 1.5);
+
+        copies.forEach((c, i) => {
+          const a  = startAngles[i] + phaseNow;
+          const dx = driftX + radiusNow * Math.cos(a);
+          const dy = radiusNow * Math.sin(a);
+          c.style.transform = `translate(${dx}px, ${dy}px) scale(${scaleNow})`;
+          c.style.opacity = opNow.toFixed(3);
+        });
+
+        if (p < 1 && game.animating) requestAnimationFrame(tickSpiral);
+      };
+      requestAnimationFrame(tickSpiral);
+    }, tSpiral);
+
+    // ---- PHASE E — new bread blooms in at source slot ----
+    // Fired partway into the spiral so spiraling copies and the blooming
+    // bread overlap visually. The eye reads it as "the copies became the bread".
+    const tBreadForm = tSpiral + Math.floor(ANIM.DUR_SPIRAL * ANIM.BREAD_FORM_OFFSET_PCT);
+    setTimeout(() => {
+      game.currentSourceCount = afterCount;
+      renderCluster(dom.sourceCluster, afterCount);
+
+      // Set initial bloom-in state, then transition to full size on next frame.
+      dom.sourceCluster.style.transition = "none";
+      dom.sourceCluster.style.transformOrigin = "center center";
+      dom.sourceCluster.style.transform = "scale(0.5)";
+      dom.sourceCluster.style.opacity = "0";
+      dom.sourceCluster.style.visibility = "";
+      void dom.sourceCluster.offsetWidth;
+      dom.sourceCluster.style.transition =
+        `transform ${ANIM.DUR_BREAD_FORM}ms cubic-bezier(.2,.8,.3,1.3), ` +
+        `opacity ${Math.min(280, ANIM.DUR_BREAD_FORM)}ms ease`;
+      dom.sourceCluster.style.transform = "scale(1)";
+      dom.sourceCluster.style.opacity = "1";
+
+      audio.bump(game.selected.length);
+    }, tBreadForm);
+
+    // ---- PHASE G — cleanup ----
+    // Wait for the slowest tail (spiral end OR bread-form end), then
+    // remove temp DOM and restore the source cluster's natural styles.
+    const spiralEnd = tSpiral + ANIM.DUR_SPIRAL;
+    const breadEnd  = tBreadForm + ANIM.DUR_BREAD_FORM;
+    const tDone = Math.max(spiralEnd, breadEnd) + ANIM.DUR_SETTLE;
+    setTimeout(() => {
+      copies.forEach(c => c.remove());
+      opRing.remove();
+      // Strip the inline styles set during the bloom-in so the natural
+      // CSS rules (.cluster--source { left:150 top:150 }) take over again.
+      dom.sourceCluster.style.transition = "";
+      dom.sourceCluster.style.transform = "";
+      dom.sourceCluster.style.transformOrigin = "";
+      dom.sourceCluster.style.opacity = "";
+      // Trigger the brightness flash now that the bloom is done.
+      dom.sourceCluster.classList.remove("flash");
+      void dom.sourceCluster.offsetWidth;
+      dom.sourceCluster.classList.add("flash");
+      game.animating = false;
+    }, tDone);
   }
 
   /* ------------------------------------------------------------
@@ -596,7 +718,6 @@
       return lv.correctSequence.every((v, i) => v === game.selected[i]);
     }
 
-    // Non-strict: compare numeric products.
     const product = game.selected.reduce((a, b) => a * b, 1);
     return lv.source * product === lv.target;
   }
@@ -605,30 +726,20 @@
     if (game.state === "checking") return;
     setGameState("checking");
     const ok = evaluateAnswer();
-    if (ok) {
-      onCorrect();
-    } else {
-      onIncorrect();
-    }
+    if (ok) onCorrect();
+    else    onIncorrect();
   }
 
   function onCorrect() {
     setGameState("correct");
 
-    // Render the full evaluated expression in the success pill, replacing
-    // the in-progress chip chain. Format: "2×2×2 = 2³ = 8" using Unicode
-    // superscripts (the <sup> HTML tag was rendering oddly here — baselined
-    // digits with whitespace — because no ancestor .chip styling applied).
     const lv = currentLevel();
     const expansion = Array(lv.exponent).fill(lv.base).join("×");
     dom.answerInner.textContent =
       `${expansion} = ${lv.base}${toSuperscript(lv.exponent)} = ${lv.target}`;
 
     dom.answerBar.classList.add("success");
-    // Auto-hide the green result pill after a feedback delay. Without this,
-    // .success would linger until the next level loads (end of penguin walk).
     setTimeout(() => dom.answerBar.classList.remove("success"), 1500);
-    // Retrigger pulse + reveal cleanly even if classes linger from before.
     dom.targetCluster.classList.remove("pulse", "solved");
     void dom.targetCluster.offsetWidth;
     dom.targetCluster.classList.add("pulse", "solved");
@@ -636,33 +747,22 @@
     audio.correct();
     playPenguinWalk("walk");
 
-    // Brief warm glow overlay as positive visual feedback.
     if (dom.winFlash) {
       dom.winFlash.classList.add("on");
       setTimeout(() => dom.winFlash.classList.remove("on"), 900);
     }
 
-    // Switch green button to "next" mode
     setGameState("levelComplete");
     updateProgress(true);
 
-    // Auto-advance: when the penguin's cross-walk animation finishes, load
-    // the next level. The button still works as a manual skip but is no
-    // longer required — both routes funnel through goToNextLevel.
     onPenguinWalkEnd(goToNextLevel);
   }
 
-  /* ------------------------------------------------------------
-     Penguin reaction animation.
-       mode === "walk"    — correct: completes the full path across grass
-       mode === "retreat" — wrong:   walks halfway, turns, runs back
-     Retriggers class cleanly so repeated calls always restart the CSS anim.
-     ------------------------------------------------------------ */
   function playPenguinWalk(mode) {
     const el = dom.penguinWalker;
     if (!el) return;
     el.classList.remove("walking", "retreating");
-    void el.offsetWidth;             // force reflow to restart animation
+    void el.offsetWidth;
     el.classList.add(mode === "retreat" ? "retreating" : "walking");
   }
 
@@ -678,7 +778,6 @@
       dom.answerBar.classList.remove("shake");
     }, 500);
 
-    // After a short pause, clear chips and reset visuals so user can retry.
     setTimeout(() => {
       game.selected = [];
       game.currentSourceCount = currentLevel().source;
@@ -690,7 +789,7 @@
   }
 
   /* ------------------------------------------------------------
-     Action button (green) behavior
+     Buttons / state — unchanged
      ------------------------------------------------------------ */
   function updateActionButton() {
     dom.actionBtn.classList.remove("disabled","ready","next");
@@ -710,11 +809,7 @@
     dom.undoBtn.classList.toggle("disabled", game.selected.length === 0);
   }
 
-  /* ------------------------------------------------------------
-     Progress
-     ------------------------------------------------------------ */
   function updateProgress(afterCorrect) {
-    // Use levelIndex + (1 if just finished) over total for fill height.
     const total = game.levels.length;
     const solved = game.levelIndex + (afterCorrect ? 1 : 0);
     const pct = Math.min(100, (solved / total) * 100);
@@ -722,9 +817,6 @@
     dom.progressMarker.style.bottom = pct + "%";
   }
 
-  /* ------------------------------------------------------------
-     Feedback toast
-     ------------------------------------------------------------ */
   let toastTimer = null;
   function flashToast(msg, tone) {
     dom.toast.textContent = msg;
@@ -735,9 +827,6 @@
     toastTimer = setTimeout(() => dom.toast.classList.remove("show"), 1100);
   }
 
-  /* ------------------------------------------------------------
-     State machine
-     ------------------------------------------------------------ */
   function setGameState(next) {
     game.state = next;
     updateActionButton();
@@ -749,11 +838,9 @@
     }
   }
 
-  /* ------------------------------------------------------------
-     Action button click dispatcher
-     ------------------------------------------------------------ */
   function onActionClick() {
     if (dom.actionBtn.classList.contains("disabled")) return;
+    if (game.animating) return;
     if (game.state === "levelComplete") {
       audio.click();
       goToNextLevel();
@@ -764,9 +851,6 @@
     }
   }
 
-  /* ------------------------------------------------------------
-     Pause / restart
-     ------------------------------------------------------------ */
   function showPauseModal() {
     if (game.state === "gameComplete") return;
     audio.click();
@@ -776,7 +860,6 @@
   function resumeGame() {
     audio.click();
     dom.pauseModal.classList.remove("show");
-    // Restore sensible state based on whether chips exist.
     setGameState(game.selected.length > 0 ? "buildingAnswer" : "ready");
   }
   function restartLevel() {
@@ -785,11 +868,7 @@
     loadLevel(game.levelIndex);
   }
 
-  /* ------------------------------------------------------------
-     Keyboard support
-     ------------------------------------------------------------ */
   function onKey(e) {
-    // Ignore input while the first-load tutorial overlay is up.
     if (dom.tutorialModal && dom.tutorialModal.classList.contains("show")) {
       if (e.key === "Enter" || e.key === "Escape") {
         e.preventDefault();
@@ -815,9 +894,6 @@
     }
   }
 
-  /* ------------------------------------------------------------
-     Init
-     ------------------------------------------------------------ */
   function initGame() {
     fitStage();
 
@@ -833,8 +909,6 @@
     });
     window.addEventListener("keydown", onKey);
 
-    // First-load tutorial. localStorage is wrapped in try/catch because
-    // some browsers block it for file:// origins.
     let seen = false;
     try { seen = localStorage.getItem("mg.tutorialSeen") === "1"; } catch (_) {}
     if (!seen && dom.tutorialModal) {
@@ -851,7 +925,6 @@
     loadLevel(0);
   }
 
-  // Boot when DOM ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initGame);
   } else {
